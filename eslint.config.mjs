@@ -10,7 +10,7 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import sortKeysFix from 'eslint-plugin-sort-keys-fix';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import globals from 'globals';
+import stylexjs from '@stylexjs/eslint-plugin';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,20 +26,23 @@ export default [
   {
     ignores: ['**/node_modules'],
   },
+
   ...compat.extends('alloy', 'alloy/react'),
   {
+    files: ['**/*.js', '**/*.jsx'],
+
     plugins: {
       'simple-import-sort': simpleImportSort,
       'sort-keys-fix': sortKeysFix,
       'no-function-declare-after-return': noFunctionDeclareAfterReturn,
       'no-only-tests': noOnlyTests,
+      '@stylexjs': stylexjs,
       'react-compiler': reactCompiler,
     },
 
     languageOptions: {
       ...reactPlugin.configs.flat.recommended.languageOptions,
       globals: {
-        ...globals.browser,
         JSX: true,
         __DEV__: true,
       },
@@ -70,7 +73,35 @@ export default [
     },
 
     rules: {
-      'simple-import-sort/imports': 'error',
+      'simple-import-sort/imports': [
+        'error',
+        {
+          groups: [
+            // Packages `react` related packages come first.
+            ['^react', '^\\w', '^@hookform', '^@radix-ui'],
+            // npm packages
+            // Anything that starts with a letter (or digit or underscore), or `@` followed by a letter.
+            // ['^\\w'],
+            // Internal packages.
+            ['^@store(/.*|$)'],
+            ['^@components(/.*|$)'],
+            ['^@ui(/.*|$)'],
+            ['^@lib(/.*|$)'],
+            ['^@pages(/.*|$)'],
+            ['^@utils(/.*|$)'],
+            ['^@hooks(/.*|$)'],
+            ['^@services(/.*|$)'],
+            // Side effect imports.
+            ['^\\u0000'],
+            // Parent imports. Put `..` last.
+            ['^\\.\\.(?!/?$)', '^\\.\\./?$'],
+            // Other relative imports. Put same-folder imports and `.` last.
+            ['^\\./(?=.*/)(?!/?$)', '^\\.(?!/?$)', '^\\./?$'],
+            // Style imports.
+            ['^.+\\.?(css)$'],
+          ],
+        },
+      ],
       'simple-import-sort/exports': 'error',
       eqeqeq: [2, 'allow-null'],
       'import/first': 2,
@@ -88,8 +119,12 @@ export default [
         },
       ],
 
+      '@stylexjs/valid-styles': 'error',
+      '@stylexjs/no-unused': 'error',
+      '@stylexjs/valid-shorthands': 'warn',
+      '@stylexjs/sort-keys': 'warn',
+
       'no-undef': 'error', // flag undefined identifiers like `sdasdasdad`
-      'no-unused-expressions': 'error', // also flag useless expressions
 
       'react/no-did-update-set-state': 'off', // still good to disable if using React 18+
 
@@ -162,24 +197,6 @@ export default [
       'react/no-children-prop': 0,
       'react-compiler/react-compiler': 'error',
       'react/jsx-no-constructed-context-values': 0,
-    },
-  },
-  {
-    files: ['**/*.js', '**/*.jsx'],
-    rules: {
-      'simple-import-sort/imports': [
-        'error',
-        {
-          groups: [
-            ['^react', String.raw`^@?\w`],
-            ['^(@|components)(/.*|$)'],
-            [String.raw`^\u0000`],
-            [String.raw`^\.\.(?!/?$)`, String.raw`^\.\./?$`],
-            [String.raw`^\./(?=.*/)(?!/?$)`, String.raw`^\.(?!/?$)`, String.raw`^\./?$`],
-            [String.raw`^.+\.?(css)$`],
-          ],
-        },
-      ],
     },
   },
 ];

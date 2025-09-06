@@ -1,12 +1,21 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 
-console.log({ ReactDOM });
+import './css/app.css';
+
+import stylex from '@stylexjs/stylex';
+
+const styles = stylex.create({
+  root: {
+    fontSize: '20px',
+    fontWeight: 600,
+  },
+});
 
 const rootElement = document.getElementById('root');
 
 if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
 
-  root.render(<div>1234</div>);
+  root.render(<div className={stylex(styles.root)}>1234</div>);
 }

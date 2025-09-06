@@ -7,7 +7,6 @@ import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import CopyPlugin from 'copy-webpack-plugin';
 import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
-import StylexPlugin from '@stylexjs/webpack-plugin';
 import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
 import TerserPlugin from 'terser-webpack-plugin';
 
@@ -122,19 +121,6 @@ export default (env, { mode }) => {
       new webpack.DefinePlugin({ 'process.env.NODE_ENV': JSON.stringify(mode) }),
 
       new CopyPlugin({ patterns: [{ from: './src/assets', to: '' }] }),
-
-      new StylexPlugin({
-        filename: 'styles.[contenthash].css',
-        dev: mode === 'development',
-        runtimeInjection: false,
-        classNamePrefix: 'x',
-        unstable_moduleResolution: {
-          type: 'commonJS',
-          rootDir: __dirname,
-        },
-        useCSSLayers: true,
-        babelConfig: { plugins: ['@babel/plugin-transform-private-methods'] },
-      }),
 
       isDevelopment && new ReactRefreshWebpackPlugin(),
 

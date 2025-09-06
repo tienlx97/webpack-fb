@@ -24,10 +24,15 @@ export default function (api) {
       [
         styleXPlugin,
         {
-          dev: true,
-          test: false,
-          unstable_moduleResolution: { type: 'commonJS', rootDir: __dirname },
-          useCSSLayers: true,
+          // useCSSLayers: true,
+          dev: process.env.NODE_ENV === 'development',
+          test: process.env.NODE_ENV === 'test',
+          runtimeInjection: false,
+          treeshakeCompensation: true,
+          unstable_moduleResolution: {
+            type: 'commonJS',
+            rootDir: __dirname,
+          },
         },
       ],
       // ESM-safe: just pass the plugin string; no require.resolve
