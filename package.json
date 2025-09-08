@@ -58,7 +58,8 @@
     "postcss-loader": "8.2.0",
     "@svgr/webpack": "8.1.0",
     "postcss-preset-env": "10.3.1",
-    "file-loader": "6.2.0"
+    "file-loader": "6.2.0",
+    "fbjs": "3.0.5"
   },
   "type": "module"
 }

@@ -1,16 +1,16 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-import webpack from 'webpack';
+import { CleanWebpackPlugin } from 'clean-webpack-plugin';
+import CopyPlugin from 'copy-webpack-plugin';
+import dotenv from 'dotenv';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
-import CopyPlugin from 'copy-webpack-plugin';
-import { CleanWebpackPlugin } from 'clean-webpack-plugin';
-import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
-import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
+import path from 'path';
 import TerserPlugin from 'terser-webpack-plugin';
+import { fileURLToPath } from 'url';
+import webpack from 'webpack';
+import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
 
-import dotenv from 'dotenv';
+import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +31,54 @@ export default (env, { mode }) => {
       extensions: fileExtensions.map((ext) => '.' + ext).concat(['.js', '.jsx', '.ts', '.tsx', '.css']),
       alias: {
         // add your aliases here if needed, e.g. '@': path.resolve(__dirname, 'src'),
+        '@fb-utils': path.resolve(__dirname, 'src/utils'),
+        '@fb-contexts': path.resolve(__dirname, 'src/contexts'),
+        '@fb-error': path.resolve(__dirname, 'src/error'),
+        '@fb-placeholder': path.resolve(__dirname, 'src/placeholder'),
+        '@fb-hooks': path.resolve(__dirname, 'src/hooks'),
+        '@fb-layout': path.resolve(__dirname, 'src/layout'),
+        '@fb-text': path.resolve(__dirname, 'src/text'),
+        '@fb-theme': path.resolve(__dirname, 'src/theme'),
+        '@fb-keyboard': path.resolve(__dirname, 'src/keyboard'),
+        '@fb-dump': path.resolve(__dirname, 'src/dump'),
+        '@fb-platform': path.resolve(__dirname, 'src/platform'),
+        '@fb-image': path.resolve(__dirname, 'src/image'),
+        '@fb-toast': path.resolve(__dirname, 'src/toast'),
+        '@fb-icons': path.resolve(__dirname, 'src/icons'),
+        '@fb-event-interaction': path.resolve(__dirname, 'src/event-interaction'),
+        '@fb-focus': path.resolve(__dirname, 'src/focus'),
+        '@fb-pressable': path.resolve(__dirname, 'src/pressable'),
+        '@fb-link': path.resolve(__dirname, 'src/link'),
+        '@fb-button': path.resolve(__dirname, 'src/button'),
+        '@fb-network': path.resolve(__dirname, 'src/network'),
+        '@fb-dialog': path.resolve(__dirname, 'src/dialog'),
+        '@fb-glimmer': path.resolve(__dirname, 'src/glimmer'),
+        '@fb-process-ring': path.resolve(__dirname, 'src/process-ring'),
+        '@fb-input': path.resolve(__dirname, 'src/input'),
+        '@fb-card': path.resolve(__dirname, 'src/card'),
+        '@fb-collapse': path.resolve(__dirname, 'src/collapse'),
+        '@fb-switch': path.resolve(__dirname, 'src/switch'),
+        '@fb-pivot-link': path.resolve(__dirname, 'src/pivot-link'),
+        '@fb-badge': path.resolve(__dirname, 'src/badge'),
+        '@fb-contextual': path.resolve(__dirname, 'src/contextual'),
+        '@fb-constants': path.resolve(__dirname, 'src/constants'),
+        '@fb-cell': path.resolve(__dirname, 'src/cell'),
+        '@fb-view': path.resolve(__dirname, 'src/view'),
+        '@fb-menu': path.resolve(__dirname, 'src/menu'),
+        '@fb-tooltip': path.resolve(__dirname, 'src/tooltip'),
+        '@FB-COMPONENT': path.resolve(__dirname, 'src/FB-COMPONENT'),
+        '@FB-CONTEXTS': path.resolve(__dirname, 'src/FB-CONTEXTS'),
+        '@fb-list': path.resolve(__dirname, 'src/list'),
+        '@fb-relay': path.resolve(__dirname, 'src/relay'),
+        '@fb-lazy-load': path.resolve(__dirname, 'src/lazy-load'),
+        '@fb-callout': path.resolve(__dirname, 'src/callout'),
+        '@fb-graphql': path.resolve(__dirname, 'src/__GRAPHQL__'),
+        '@fb-accordion': path.resolve(__dirname, 'src/accordion'),
+        '@fb-form': path.resolve(__dirname, 'src/form'),
+        '@fb-unit': path.resolve(__dirname, 'src/unit'),
+        '@fb-slider': path.resolve(__dirname, 'src/slider'),
+        '@fb-audio': path.resolve(__dirname, 'src/audio'),
+        '@fb-sticker': path.resolve(__dirname, 'src/sticker'),
       },
       fallback: {
         path: 'path-browserify',
