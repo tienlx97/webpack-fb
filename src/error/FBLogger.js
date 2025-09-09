@@ -1,6 +1,6 @@
 /**
  * Changelog:
- * - 09/12/2024
+ * - 09/09/2025
  */
 
 import { ErrorMetadata } from './ErrorMetadata';
@@ -11,6 +11,6 @@ export function FBLogger(projectName, occurAt) {
   return occurAt ? fbLogMessage.event(projectName + '.' + occurAt) : fbLogMessage;
 }
 
-FBLogger.addGlobalMetadata = function (a, b, c) {
-  ErrorMetadata.addGlobalMetadata(a, b, c);
+FBLogger.addGlobalMetadata = function (key, value, context) {
+  ErrorMetadata.addGlobalMetadata(key, value, context);
 };

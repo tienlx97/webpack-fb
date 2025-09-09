@@ -1,124 +1,130 @@
+/* eslint-disable complexity */
 /**
  * Changelog:
- * - 09/12/2024
+ * - 09/09/2025
  */
 
 import { err } from './err';
 import { getErrorSafe } from './getErrorSafe';
 
-// Global variables to store the error reporter and a flag for setup status
+// Store the global error reporter and setup status
 let errorReporter = null;
 let isSetup = false;
 
 /**
- * Handles unhandled promise rejections.
- * @param {Object} event - The unhandledrejection event.
+ * Handle unhandled promise rejections
+ * @param {PromiseRejectionEvent} event - The unhandledrejection event object.
  */
-// eslint-disable-next-line complexity
 function handleUnhandledRejection(event) {
   // Exit if the error reporter is not set
-  if (!errorReporter) return;
+  if (!errorReporter) {
+    return;
+  }
 
   let reporter = errorReporter;
-  let errorReason = event.reason;
-  let normalizedError = getErrorSafe(errorReason);
+  let originalError = event.reason;
+  let normalizedError = getErrorSafe(originalError);
   let errorName = null;
+  let keys = [];
 
-  // Further process if the original error is an object and different from the normalized error
-  if (errorReason !== normalizedError && typeof errorReason === 'object' && errorReason) {
-    // eslint-disable-next-line no-inner-declarations, no-var
-    var keys = Object.keys(errorReason).sort().slice(0, 3);
+  // --- Step 1. Extract extra information if the original error differs from the normalized one ---
+  if (originalError !== normalizedError && typeof originalError === 'object' && originalError) {
+    // Take up to 3 keys for naming purposes
+    keys = Object.keys(originalError).sort().slice(0, 3);
 
-    // Normalize the error message
-    if (typeof errorReason.message !== 'string' && typeof errorReason.messageFormat === 'string') {
-      errorReason.message = errorReason.messageFormat;
-      normalizedError = getErrorSafe(errorReason);
+    // Use messageFormat if message is missing
+    if (typeof originalError.message !== 'string' && typeof originalError.messageFormat === 'string') {
+      originalError.message = originalError.messageFormat;
+      normalizedError = getErrorSafe(originalError);
     }
 
-    // Handle different types of error messages
-    if (typeof errorReason.message !== 'string' && typeof errorReason.errorMsg === 'string') {
-      if (/^\s*\<!doctype/i.test(errorReason.errorMsg)) {
-        let match = /<title>([^<]+)<\/title>(?:(?:.|\n)*<h1>([^<]+)<\/h1>)?/im.exec(errorReason.errorMsg);
-        if (match) {
-          normalizedError = err('HTML document with title="%s" and h1="%s"', match[1] || '', match[2] || '');
-        } else {
-          normalizedError = err('HTML document sanitized');
-        }
-      } else if (/^\s*<\?xml/i.test(errorReason.errorMsg)) {
+    // --- Step 2. Handle different message formats ---
+    if (typeof originalError.message !== 'string' && typeof originalError.errorMsg === 'string') {
+      const msg = originalError.errorMsg;
+
+      // Handle HTML documents
+      if (/^\s*\<!doctype/i.test(msg)) {
+        const match = /<title>([^<]+)<\/title>(?:(?:.|\n)*<h1>([^<]+)<\/h1>)?/im.exec(msg);
+        normalizedError = match
+          ? err('HTML document with title="%s" and h1="%s"', match[1] || '', match[2] || '')
+          : err('HTML document sanitized');
+      }
+      // Handle XML documents
+      else if (/^\s*<\?xml/i.test(msg)) {
         normalizedError = err('XML document sanitized');
-      } else {
-        errorReason.message = errorReason.errorMsg;
-        normalizedError = getErrorSafe(errorReason);
+      }
+      // Otherwise, just treat errorMsg as the message
+      else {
+        originalError.message = msg;
+        normalizedError = getErrorSafe(originalError);
       }
     }
 
-    // Determine the error name based on available properties
-    if (normalizedError !== errorReason && typeof errorReason.name === 'string') {
-      errorName = errorReason.name;
-    } else if (typeof errorReason.name !== 'string') {
-      if (typeof errorReason.errorCode === 'string') {
-        errorName = 'UnhandledRejectionWith_errorCode_' + errorReason.errorCode;
-      } else if (typeof errorReason.error === 'number') {
-        errorName = 'UnhandledRejectionWith_error_' + String(errorReason.error);
+    // --- Step 3. Decide on the error name ---
+    if (normalizedError !== originalError && typeof originalError.name === 'string') {
+      errorName = originalError.name;
+    } else if (typeof originalError.name !== 'string') {
+      if (typeof originalError.errorCode === 'string') {
+        errorName = `UnhandledRejectionWith_errorCode_${originalError.errorCode}`;
+      } else if (typeof originalError.error === 'number') {
+        errorName = `UnhandledRejectionWith_error_${originalError.error}`;
       }
     }
   }
 
-  // Set logging source and error name
+  // --- Step 4. Set error name and logging source ---
   normalizedError.loggingSource = 'ONUNHANDLEDREJECTION';
   try {
-    errorName =
-      normalizedError === errorReason && errorName
+    normalizedError.name =
+      normalizedError === originalError && errorName
         ? errorName
-        : errorReason.name ||
+        : originalError.name ||
           (keys.length
-            ? 'UnhandledRejectionWith_' + keys.join('_')
-            : 'UnhandledRejection_' + (errorReason ? typeof errorReason : 'null'));
-    normalizedError.name = errorName;
-  } catch (e) {}
+            ? `UnhandledRejectionWith_${keys.join('_')}`
+            : `UnhandledRejection_${originalError ? typeof originalError : 'null'}`);
+  } catch {}
 
-  // Enhance the stack trace with additional information
+  // --- Step 5. Improve stack trace ---
   try {
-    let stack = errorReason ? errorReason.stack : '';
-    if (!stack) stack = normalizedError.stack;
-    if (!stack) stack = err('').stack;
+    let stack = originalError?.stack || normalizedError.stack || err('').stack;
     normalizedError.stack = `${normalizedError.name}: ${normalizedError.message}\n${stack
       .split('\n')
       .slice(1)
       .join('\n')}`;
-  } catch (e) {}
+  } catch {}
 
-  // Include promise-specific stack traces if available
+  // --- Step 6. Add promise-specific stack traces if available ---
   try {
-    let promise = event.promise;
-    normalizedError.stack +=
-      promise && typeof promise.settledStack === 'string'
-        ? `\n    at <promise_settled_stack_below>\n${promise.settledStack}`
-        : '';
-    normalizedError.stack +=
-      promise && typeof promise.createdStack === 'string'
-        ? `\n    at <promise_created_stack_below>\n${promise.createdStack}`
-        : '';
-  } catch (e) {}
+    const promise = event.promise;
+    if (promise && typeof promise.settledStack === 'string') {
+      normalizedError.stack += `\n    at <promise_settled_stack_below>\n${promise.settledStack}`;
+    }
 
-  // Report the error and prevent the default handling
+    if (promise && typeof promise.createdStack === 'string') {
+      normalizedError.stack += `\n    at <promise_created_stack_below>\n${promise.createdStack}`;
+    }
+  } catch {}
+
+  // --- Step 7. Report the error and prevent browser warnings ---
   reporter.reportError(normalizedError);
   event.preventDefault();
 }
 
 /**
- * Sets up the unhandledrejection event listener.
- * @param {Object} reporter - The global error reporter object.
+ * Set up the global unhandled promise rejection listener
+ * @param {Object} reporter - The error reporter that handles reporting errors.
  */
 function setupUnhandledRejectionListener(reporter) {
   errorReporter = reporter;
+
+  // Only register once
   if (typeof window.addEventListener === 'function' && !isSetup) {
     isSetup = true;
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
   }
 }
 
-// Object to handle unhandled promise rejections
+// Export the unhandled rejection handler
 export const ErrorUnhandledRejectionHandler = {
   onunhandledrejection: handleUnhandledRejection,
   setup: setupUnhandledRejectionListener,

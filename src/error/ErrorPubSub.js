@@ -70,7 +70,7 @@ export const ErrorPubSub = {
           nError,
           nError.loggingSource !== null && nError.loggingSource !== undefined ? nError.loggingSource : 'DEPRECATED',
         );
-      } catch (a) {}
+      } catch {}
     flag = false;
     return true;
   },
