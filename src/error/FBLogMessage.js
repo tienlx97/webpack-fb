@@ -37,7 +37,7 @@ export class FBLogMessage {
    * @param  {...any} params                          Message parameters
    * @returns {Error}                                 The underlying error object (raw)
    */
-  logMessage(type, msgFormat, ...params) {
+  logMessage(level, msgFormat, ...params) {
     const fmt = String(msgFormat);
 
     // Local aliases for properties we’ll add back onto the normalized error
@@ -46,77 +46,94 @@ export class FBLogMessage {
     /** @type {Error|undefined} Raw error (if provided via .catching) */
     let rawError = this.error;
 
-    let normalizeErrorObj;
+    /** @type {any} Normalized error object (output of ErrorNormalizeUtils.normalizeError) */
+    let normalized;
 
+    // Case 1: caller already provided a normalized error object
     if (this.normalizedError) {
-      const obj = {
-        message: this.normalizedError.messageFormat + ' [Caught in: ' + fmt + ']',
+      // Compose a combined message: prepend the existing normalized message, then append current
+      const composed = {
+        message: `${this.normalizedError.messageFormat} [Caught in: ${fmt}]`,
         params: [].concat(this.normalizedError.messageParams, params),
         forcedKey,
       };
 
-      normalizeErrorObj = Object.assign(this.normalizedError, {
-        message: obj.message,
-        messageFormat: obj.message,
-        messageParams: ErrorSerializer.toStringParams(obj.params),
+      normalized = Object.assign(this.normalizedError, {
+        message: composed.message,
+        messageFormat: composed.message,
+        messageParams: ErrorSerializer.toStringParams(composed.params),
         project,
-        type,
+        type: level,
         loggingSource: 'FBLOGGER',
       });
-
-      // this.normalizedError.message = obj.message;
-      // this.normalizedError.messageFormat = obj.message;
-      // this.normalizedError.messageParams = ErrorSerializer.toStringParams(
-      //   obj.params
-      // );
-      // this.normalizedError.project = project;
-      // this.normalizedError.type = type;
-      // this.normalizedError.loggingSource = "FBLOGGER";
+      // Case 2: caller provided a raw Error (via .catching)
     } else if (rawError !== null && rawError !== undefined) {
-      this.taalOpcodes.length > 0 &&
+      if (this.taalOpcodes.length > 0) {
         new FBLogMessage('fblogger')
           .blameToPreviousFrame()
           .blameToPreviousFrame()
           .warn('Blame helpers do not work with catching');
+      }
 
+      // Enrich the existing error with FBLOGGER fields
       ErrorSerializer.aggregateError(rawError, {
         messageFormat: fmt,
         messageParams: ErrorSerializer.toStringParams(params),
         errorName: rawError.name,
         forcedKey,
         project,
-        type,
+        type: level,
         loggingSource: 'FBLOGGER',
       });
-      normalizeErrorObj = ErrorNormalizeUtils.normalizeError(rawError);
+
+      normalized = ErrorNormalizeUtils.normalizeError(rawError);
+
+      // Case 3: create a new Error from the message/params
     } else {
-      rawError = new Error(fmt);
-      if (rawError.stack === undefined) {
+      const freshError = new Error(fmt);
+      if (freshError.stack === undefined) {
         try {
-          throw rawError;
+          throw freshError;
         } catch {}
       }
-      rawError.messageFormat = fmt;
-      rawError.messageParams = ErrorSerializer.toStringParams(params);
-      rawError.blameModule = blameModule;
-      rawError.forcedKey = forcedKey;
-      rawError.project = project;
-      rawError.type = type;
-      rawError.loggingSource = 'FBLOGGER';
-      rawError.taalOpcodes = [TAALOpcode.PREVIOUS_FRAME, TAALOpcode.PREVIOUS_FRAME].concat(this.taalOpcodes);
-      normalizeErrorObj = ErrorNormalizeUtils.normalizeError(rawError);
-      normalizeErrorObj.name = 'FBLogger';
+
+      // Attach formatting and FBLOGGER-specific fields
+      freshError.messageFormat = fmt;
+      freshError.messageParams = ErrorSerializer.toStringParams(params);
+      freshError.blameModule = blameModule;
+      freshError.forcedKey = forcedKey;
+      freshError.project = project;
+      freshError.type = level;
+      freshError.loggingSource = 'FBLOGGER';
+
+      // Add TAAL blame hints: two PREVIOUS_FRAME plus any accumulated opcodes
+      freshError.taalOpcodes = [TAALOpcode.PREVIOUS_FRAME, TAALOpcode.PREVIOUS_FRAME].concat(this.taalOpcodes);
+
+      normalized = ErrorNormalizeUtils.normalizeError(freshError);
+      normalized.name = 'FBLogger';
+
+      // Expose the created raw error via local variable for return
+      rawError = freshError;
     }
-    metadata.isEmpty() || (normalizeErrorObj.metadata = metadata.format());
+
+    // Attach formatted metadata (if any)
+    if (!metadata.isEmpty()) {
+      normalized.metadata = metadata.format();
+    }
+
+    // Merge event tags (if any)
     if (events.length > 0) {
-      if (normalizeErrorObj?.events !== undefined) {
-        let q;
-        (q = normalizeErrorObj.events).push.apply(q, events);
-      } else normalizeErrorObj.events = events;
+      if (normalized?.events !== undefined) {
+        // push into existing array to preserve reference
+        const arr = normalized.events;
+        arr.push.apply(arr, events);
+      } else {
+        normalized.events = events;
+      }
     }
 
     // Publish the normalized error to subscribers (e.g., network logger)
-    ErrorPubSub.reportNormalizedError(normalizeErrorObj);
+    ErrorPubSub.reportNormalizedError(normalized);
 
     // Return the underlying raw error (if any)
     return rawError;

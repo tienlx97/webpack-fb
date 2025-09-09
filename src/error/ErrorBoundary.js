@@ -11,17 +11,55 @@ import { ErrorPubSub } from './ErrorPubSub';
 import { ErrorSerializer } from './ErrorSerializer';
 import { getErrorSafe } from './getErrorSafe';
 
+/**
+ * Resolve a readable display name for (the first) child element.
+ * If multiple children are passed, we use the first one.
+ */
 function getReactDisplayName(children) {
-  const _children = React.Children.count(children) > 1 ? React.Children.toArray(children)[0] : children;
-  return getReactElementDisplayName(_children);
+  const firstChild = React.Children.count(children) > 1 ? React.Children.toArray(children)[0] : children;
+  return getReactElementDisplayName(firstChild);
 }
 
+/**
+ * Props for ErrorBoundary.
+ * @typedef {Object} ErrorBoundaryProps
+ * @property {(error: any) => void}    [augmentError]  Mutate/enrich the error before reporting.
+ * @property {{messageFormat?: string, messageParams?: any[]}|Object} [context] Additional context merged into the error.
+ * @property {string}                  [description="base"] Short label for where the boundary sits.
+ * @property {(error:any, moduleName:string)=>void} [onError] Callback when an error is caught.
+ * @property {(error:any, moduleName:string)=>React.ReactNode} [fallback] Rendered when an error is present.
+ * @property {number}                  [forceResetErrorCount=0] Increment to reset error state.
+ * @property {React.ReactNode}         [children]
+ */
+
+/**
+ * State for ErrorBoundary.
+ * @typedef {Object} ErrorBoundaryState
+ * @property {any}    error       Normalized error object (or null).
+ * @property {string} moduleName  Display name of the first child for attribution.
+ */
+
+/**
+ * ErrorBoundary
+ *
+ * A React error boundary that:
+ *  - Normalizes thrown values via `getErrorSafe`
+ *  - Aggregates component stack + context with `ErrorSerializer`
+ *  - Publishes errors to `ErrorPubSub`
+ *  - Renders an optional `fallback(error, moduleName)`
+ *  - Can be reset by bumping `forceResetErrorCount`
+ */
 export class ErrorBoundary extends PureComponent {
+  /** @type {Required<Pick<ErrorBoundaryProps, 'forceResetErrorCount'>>} */
   // eslint-disable-next-line react/sort-comp
   static defaultProps = {
     forceResetErrorCount: 0,
   };
 
+  /**
+   * React lifecycle: transform an error into state.
+   * We normalize the thrown value so downstream code can assume an Error-like shape.
+   */
   static getDerivedStateFromError = function (error) {
     return {
       error: getErrorSafe(error),

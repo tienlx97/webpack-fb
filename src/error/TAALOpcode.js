@@ -1,12 +1,15 @@
 /**
  * Changelog:
- * - 09/12/2024
+ * - 09/09/2025
  */
 
-// Enum for error tracking opcodes
+/**
+ * TAAL opcodes (lightweight tracing markers).
+ * Used to annotate errors with where they originated from.
+ */
 export const TAALOpcode = {
-  PREVIOUS_FILE: 1,
-  PREVIOUS_FRAME: 2,
-  PREVIOUS_DIR: 3,
-  FORCED_KEY: 4,
+  PREVIOUS_FILE: 1, // Previous source file in the call chain
+  PREVIOUS_FRAME: 2, // Previous stack frame (most recent caller)
+  PREVIOUS_DIR: 3, // Previous directory/module
+  FORCED_KEY: 4, // Force-join key when aggregating errors
 };

@@ -5,6 +5,7 @@
 
 import { env } from '@fb-utils/env';
 
+import { INVARIANT_URL } from './__DYNAMIC__';
 import { fbErrorLite } from './fbErrorLite';
 
 /**
@@ -73,7 +74,7 @@ function decodeInvariantMessage(code, params) {
  */
 function generateDecoderLink(code, params) {
   // TODO replace this with my internal
-  let link = 'https://www.internalfb.com/intern/invariant/' + code + '/';
+  let link = INVARIANT_URL + code + '/';
 
   if (params.length > 0) {
     link += '?' + params.map((param, index) => 'args[' + index + ']=' + encodeURIComponent(String(param))).join('&');
