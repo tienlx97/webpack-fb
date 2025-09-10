@@ -1,87 +1,107 @@
 /**
  * Changelog:
- * - 06/09/2025
+ * - 10/09/2025
  */
-
 import performanceNow from 'fbjs/lib/performanceNow';
 
-// Rate-limit config
-const MAX_PER_WINDOW = 6; // p
-const WINDOW_MS = 60_000; // q  (1 minute)
-const EVICT_AGE_MS = 10 * WINDOW_MS; // r  (10 minutes)
+/** Max events allowed per rolling window (per key). */
+const MAX_PER_WINDOW = 6;
 
-// Per-key state: { timestamps: number[], droppedCount: number, lastAccess: number }
-const stateByKey = new Map(); // s
-
-// Cleanup bookkeeping: last time we ran cleanup()
-let lastCleanupAt = 0; // t
+/** Rolling window size in ms (1 minute). */
+const WINDOW_MS = 60_000;
+/** Evict keys not touched for this long (10 minutes). */
+const EVICT_AGE_MS = 10 * WINDOW_MS;
 
 /**
- * Periodically evict cold keys (not accessed for > 10 minutes).
- * Runs at most once per minute to avoid overhead.
+ * Per-key state:
+ * - timestamps: event times within the rolling window (ascending)
+ * - droppedCount: how many were suppressed since last allowed emission
+ * - lastAccess: last touch time (for cold-key eviction)
+ * @type {Map<string, {timestamps:number[], droppedCount:number, lastAccess:number}>}
+ */
+const stateByKey = new Map();
+
+/** Last time we ran cleanup(), to rate-limit cleanup work. */
+let lastCleanupAt = 0;
+
+/**
+ * Evict cold keys (not accessed for > EVICT_AGE_MS).
+ * Runs at most once per WINDOW_MS to keep overhead low.
  */
 function cleanup() {
   // u()
-  const ts = performanceNow();
-  if (ts <= lastCleanupAt + WINDOW_MS) return;
-
-  const tooOldBefore = ts - EVICT_AGE_MS;
-  for (const [key, entry] of stateByKey) {
-    if (entry.lastAccess < tooOldBefore) stateByKey.delete(key);
+  const now = performanceNow();
+  if (now <= lastCleanupAt + WINDOW_MS) {
+    return;
   }
-  lastCleanupAt = ts;
+
+  const tooOldBefore = now - EVICT_AGE_MS;
+  for (const [key, entry] of stateByKey) {
+    if (entry.lastAccess < tooOldBefore) {
+      stateByKey.delete(key);
+    }
+  }
+  lastCleanupAt = now;
 }
 
 /**
- * Attempt to record a log event for a given key.
- * - Returns a positive number when the log should be emitted.
- *   (It’s "droppedCount + 1", i.e., how many suppressed since the last allow.)
- * - Returns null when this event should be suppressed (rate limited).
+ * Update rate-limit state for a key and decide whether to emit.
+ *
+ * @param {string} key
+ * @returns {number|null}
+ *   - Positive number: emit and treat the value as (droppedCount + 1),
+ *     i.e. how many were suppressed since last allow.
+ *   - null: suppress (still over the limit).
  */
 function record(key) {
-  // aa()
   cleanup();
 
-  const ts = performanceNow();
+  const now = performanceNow();
   let entry = stateByKey.get(key);
 
-  // First time we see this key: allow and initialize
+  // First sighting: allow and initialize state
   if (!entry) {
     entry = {
-      timestamps: [ts], // events within the rolling window
+      timestamps: [now], // events within the rolling window
       droppedCount: 0, // how many we’ve recently dropped
-      lastAccess: ts,
+      lastAccess: now,
     };
     stateByKey.set(key, entry);
     return 1;
   }
 
-  entry.lastAccess = ts;
+  entry.lastAccess = now;
 
-  // Drop timestamps that fell out of the rolling 60s window
-  const cutoff = ts - WINDOW_MS;
+  // Drop old timestamps that are outside the rolling window
+  const cutoff = now - WINDOW_MS;
   while (entry.timestamps.length && entry.timestamps[0] < cutoff) {
     entry.timestamps.shift();
   }
 
-  // If still under the per-window limit, allow and reset droppedCount
+  // Under the cap? allow and reset droppedCount
   if (entry.timestamps.length < MAX_PER_WINDOW) {
-    const result = entry.droppedCount + 1;
+    const result = entry.droppedCount + 1; // 1 + suppressed since last allow
     entry.droppedCount = 0;
-    entry.timestamps.push(ts);
+    entry.timestamps.push(now);
     return result; // truthy → should log
   }
 
-  // Otherwise, suppress and bump droppedCount
+  // Otherwise, suppress and increment droppedCount
   entry.droppedCount += 1;
   return null; // falsy → skip logging
 }
 
 /**
- * Public API matching your original usage.
- * Example: ErrorFilter.shouldLog({ hash: 'some-key' })
+ * ErrorFilter public API.
+ * Example:
+ *   if (ErrorFilter.shouldLog({ hash })) { ...emit... }
  */
 export const ErrorFilter = {
+  /**
+   * Decide if an event should be logged based on its per-key rate.
+   * @param {{hash:string}} evt
+   * @returns {number|null} see `record()` docs
+   */
   shouldLog(evt) {
     return record(evt.hash);
   },

@@ -10,19 +10,74 @@
 import { ErrorDynamicData } from './ErrorDynamicData';
 import { ErrorFilter } from './ErrorFilter';
 
-/** Max length for message strings before truncation. */
-let U = 1024;
-/** Monotonic position counter for error occurrences on the page. */
-let position = 0;
-/** Rolling list of ancestor error hashes to provide causal context. */
-let ancestors = [];
+/**
+ * @typedef {Object} NormalizedError
+ * @property {string} hash
+ * @property {string} [project]
+ * @property {string} [name]
+ * @property {string} [type]
+ * @property {string} [messageFormat]
+ * @property {any[]}  [messageParams]
+ * @property {number} [clientTime]
+ * @property {number|string} [line]
+ * @property {number|string} [column]
+ * @property {string} [script]
+ * @property {string} [script_path]
+ * @property {string} [loggingSource]
+ * @property {string[]} [guardList]
+ * @property {string[]} [events]
+ * @property {Record<string, any>} [extra]
+ * @property {any[]} [stackFrames]
+ * @property {any[]} [componentStackFrames]
+ * @property {string} [blameModule]
+ * @property {string[]} [metadata]
+ * @property {string[]} [loadingUrls]
+ * @property {string} [serverHash]
+ * @property {string} [windowLocationURL]
+ * @property {string[]} [xFBDebug]
+ * @property {number[]} [taalOpcodes]
+ * @property {string[]} [tags]
+ * @property {{stackFrames?: any[]}} [deferredSource]
+ * @property {string} [page_time]
+ * @property {string} [forcedKey]
+ */
+
+/**
+ * @typedef {Object} PostProps
+ * @property {string} [appId]
+ * @property {string} [cavalry_lid]
+ * @property {string} [bundle_variant]
+ * @property {string} [frontend_env]
+ * @property {string} [loggingFramework]
+ * @property {string[]} [extra]
+ * @property {number} [sample_weight]
+ * @property {string} [site_category]
+ * @property {string} [push_phase]
+ * @property {string} [script_path]
+ * @property {string} [report_source]
+ * @property {string} [report_source_ref]
+ * @property {string} [rollout_hash]
+ * @property {string} [server_revision]
+ * @property {string} [spin]
+ * @property {string|number} [client_revision]
+ * @property {Iterable<string|number>} [additional_client_revisions]
+ * @property {string} [web_session_id]
+ * @property {string[]} [projectBlocklist]
+ */
+
+// max message length before truncation
+let MAX_MESSAGE_LENGTH = 1024;
+// monotonic post counter
+let postSequence = 0;
+// rolling ancestor hashes (max 15)
+let ancestorHashes = [];
 
 /**
  * Coerces any value to string.
  * @param {*} val
  * @returns {string}
  */
-function toString(val) {
+function toStringSafe(val) {
   return String(val);
 }
 
@@ -31,7 +86,7 @@ function toString(val) {
  * @param {*} val
  * @returns {string|undefined}
  */
-function toStringNotNull(val) {
+function toStringOrUndefined(val) {
   return !val ? undefined : String(val);
 }
 
@@ -39,136 +94,127 @@ function toStringNotNull(val) {
  * Computes the “events” field by diffing normalized error extras against static props extras.
  * Any key present in either source is included; falsy in nError.extra removes it.
  *
- * @param {Record<string, any>} nErrorExtra - extras from normalized error
- * @param {string[]} [propsExtra] - optional extras from props
+ * @param {Record<string, any>} errorExtras  - extras from normalized error
+ * @param {string[]} [propExtras ] - optional extras from props
  * @returns {string[]} consolidated event keys
  */
-function eventsDiff(nErrorExtra, propsExtra) {
-  const c = {};
-  propsExtra &&
-    propsExtra.forEach((a) => {
-      c[a] = true;
+function diffEvents(errorExtras, propExtras) {
+  const set = {};
+  propExtras &&
+    propExtras.forEach((key) => {
+      set[key] = true;
     });
-  Object.keys(nErrorExtra).forEach((b) => {
-    nErrorExtra[b] ? (c[b] = true) : c[b] && delete c[b];
+  Object.keys(errorExtras).forEach((key) => {
+    errorExtras[key] ? (set[key] = true) : set[key] && delete set[key];
   });
-  return Object.keys(c);
+  return Object.keys(set);
 }
 
 /**
  * Safely truncates long strings to U chars (adds ellipsis if truncated).
- * @param {string} a
+ * @param {string} text
  * @returns {string}
  */
-function splitMsgFormat(a) {
-  a = String(a);
-  return a.length > U ? a.substring(0, U - 3) + '...' : a;
+function truncateMsg(text) {
+  const str = String(text);
+  return str.length > MAX_MESSAGE_LENGTH ? str.substring(0, MAX_MESSAGE_LENGTH - 3) + '...' : str;
 }
 
 /**
  * Normalizes an array of stack frame-like objects to a compact JSON shape.
  *
- * @param {{column?:number|string, identifier?:string, line?:number|string, script?:string}[]|null|undefined} a
+ * @param {{column?:number|string, identifier?:string, line?:number|string, script?:string}[]|null|undefined} frames
  * @returns {{column?:string, identifier?:string, line?:string, script?:string}[]}
  */
-function createStackItem(a) {
-  return (a !== null && a !== void 0 ? a : []).map((f) => ({
-    column: toStringNotNull(f.column),
-    identifier: f.identifier,
-    line: toStringNotNull(f.line),
-    script: f.script,
+function normalizeStackFrames(frames) {
+  return (frames !== null && frames !== undefined ? frames : []).map((frame) => ({
+    column: toStringOrUndefined(frame.column),
+    identifier: frame?.identifier,
+    line: toStringOrUndefined(frame.line),
+    script: frame?.script,
   }));
 }
 
 /**
- * Builds the final error payload object to be sent to the logging backend.
- *
- * NOTE: This function preserves field names expected by downstream systems.
- *
- * @param {Object} nError - normalized error object
- * @param {Object} props - static runtime props/config for logging
- * @returns {Object} payload - ready to be posted
+ * Build the final payload without mutating the input error.
+ * @param {NormalizedError} normalizedError
+ * @param {PostProps} props
  */
-function createErrorPayload(nError, props) {
-  const obj = {
-    appId: toStringNotNull(props.appId),
+function createErrorPayload(normalizedError, props) {
+  const payload = {
+    appId: toStringOrUndefined(props.appId),
     cavalry_lid: props.cavalry_lid,
     access_token: ErrorDynamicData.access_token,
-    ancestor_hash: nError.hash,
+    ancestor_hash: normalizedError.hash,
     bundle_variant: props.bundle_variant ?? null,
-    clientTime: toString(nError.clientTime),
-    column: nError.column,
-    componentStackFrames: createStackItem(nError.componentStackFrames),
-    events: nError.events,
-    extra: eventsDiff(nError.extra, props.extra),
-    forcedKey: nError.forcedKey,
+    clientTime: toStringSafe(normalizedError.clientTime),
+    column: normalizedError.column,
+    componentStackFrames: normalizeStackFrames(normalizedError.componentStackFrames),
+    events: normalizedError.events,
+    extra: diffEvents(normalizedError.extra, props.extra),
+    forcedKey: normalizedError.forcedKey,
     frontend_env: props.frontend_env ?? undefined,
-    guardList: nError.guardList,
-    line: nError.line,
+    guardList: normalizedError.guardList,
+    line: normalizedError.line,
     loggingFramework: props.loggingFramework,
-    messageFormat: splitMsgFormat(nError.messageFormat),
-    messageParams: nError.messageParams.map(splitMsgFormat),
-    name: nError.name,
-    sample_weight: toStringNotNull(props.sample_weight),
-    script: nError.script,
+    messageFormat: truncateMsg(normalizedError.messageFormat),
+    messageParams: normalizedError.messageParams.map(truncateMsg),
+    name: normalizedError.name,
+    sample_weight: toStringOrUndefined(props.sample_weight),
+    script: normalizedError.script,
     site_category: props.site_category,
-    stackFrames: createStackItem(nError.stackFrames),
-    type: nError.type,
-    page_time: toStringNotNull(nError.page_time),
-    project: nError.project,
+    stackFrames: normalizeStackFrames(normalizedError.stackFrames),
+    type: normalizedError.type,
+    page_time: toStringOrUndefined(normalizedError.page_time),
+    project: normalizedError.project,
     push_phase: props.push_phase,
     script_path: props.script_path,
-    taalOpcodes: !nError.taalOpcodes ? undefined : nError.taalOpcodes.map((x) => x),
+    taalOpcodes: !normalizedError.taalOpcodes ? undefined : normalizedError.taalOpcodes.map((x) => x),
     report_source: props.report_source,
     report_source_ref: props.report_source_ref,
     rollout_hash: props.rollout_hash ?? null,
-    server_revision: toStringNotNull(props.server_revision),
-    spin: toStringNotNull(props.spin),
+    server_revision: toStringOrUndefined(props.server_revision),
+    spin: toStringOrUndefined(props.spin),
     svn_rev: String(props.client_revision),
-    additional_client_revisions: Array.from(props.additional_client_revisions ?? []).map(toString),
+    additional_client_revisions: Array.from(props.additional_client_revisions ?? []).map(toStringSafe),
     web_session_id: props.web_session_id,
     version: '3',
-    xFBDebug: nError.xFBDebug,
-    tags: nError.tags,
+    xFBDebug: normalizedError.xFBDebug,
+    tags: normalizedError.tags,
   };
 
   // Optional fields set only when present on the normalized error
-  const d = nError.deferredSource;
+  const deferredSource = normalizedError.deferredSource;
 
-  if (nError.blameModule !== null) {
-    obj.blameModule = String(nError.blameModule);
+  if (normalizedError.blameModule !== null) {
+    payload.blameModule = String(normalizedError.blameModule);
   }
 
-  if (nError.deferredSource && nError.deferredSource.stackFrames) {
+  if (deferredSource && deferredSource.stackFrames) {
     // mutate the deferredSource with normalized frames (as expected by downstream)
-    nError.deferredSource.deferredSource = {
-      stackFrames: createStackItem(d.stackFrames),
+    normalizedError.deferredSource = {
+      stackFrames: normalizeStackFrames(deferredSource.stackFrames),
     };
   }
 
-  if (nError.metadata) obj.metadata = nError.metadata;
-  if (nError.loadingUrls) obj.loadingUrls = nError.loadingUrls;
-  if (nError.serverHash) obj.serverHash = nError.serverHash;
-  if (nError.windowLocationURL) obj.windowLocationURL = nError.windowLocationURL;
-  if (nError.loggingSource) obj.loggingSource = nError.loggingSource;
+  if (normalizedError.metadata) payload.metadata = normalizedError.metadata;
+  if (normalizedError.loadingUrls) payload.loadingUrls = normalizedError.loadingUrls;
+  if (normalizedError.serverHash) payload.serverHash = normalizedError.serverHash;
+  if (normalizedError.windowLocationURL) payload.windowLocationURL = normalizedError.windowLocationURL;
+  if (normalizedError.loggingSource) payload.loggingSource = normalizedError.loggingSource;
 
-  return obj;
+  return payload;
 }
 
 /**
- * Posts a normalized error if it passes sampling and blocklist checks.
- *
- * Side effects:
- *   - Increments a page-level `position` counter and includes it in payload.
- *   - Appends current error hash to the rolling `ancestors` (max 15).
- *
- * @param {Object} nError - normalized error (must include `hash`, `project`, etc.)
- * @param {Object} props  - posting configuration and static fields
- * @param {(payload:Object)=>void} logFunc - sink function that actually delivers the payload
- * @returns {boolean} true if posted (or attempted), false if skipped
+ * Post a normalized error if sampling, filters, and blocklists allow it.
+ * @param {NormalizedError} normalizedError
+ * @param {PostProps} props
+ * @param {(payload:object)=>void} sendPayload
+ * @returns {boolean}
  */
-function postError(nError, props, logFunc) {
-  position++;
+function postError(normalizedError, props, sendPayload) {
+  postSequence += 1;
 
   // Skip entirely if sampling weight is zero
   if (props.sample_weight === 0) {
@@ -176,33 +222,33 @@ function postError(nError, props, logFunc) {
   }
 
   // Respect dynamic filter (e.g., rate limit, dedupe, allowlist)
-  const shouldLog = ErrorFilter.shouldLog(nError);
+  const shouldLog = ErrorFilter.shouldLog(normalizedError);
   if (!shouldLog) {
     return false;
   }
 
   // Respect project-level blocklist
-  if (props.projectBlocklist !== null && props.projectBlocklist.includes(nError.project)) {
+  if (props.projectBlocklist !== null && props.projectBlocklist.includes(normalizedError.project)) {
     return false;
   }
 
   // Build base payload
-  const payload = createErrorPayload(nError, props);
+  const payload = createErrorPayload(normalizedError, props);
 
   // Enrich with posting-time context
   Object.assign(payload, {
-    ancestors: ancestors.slice(),
-    clientWeight: toString(shouldLog),
-    page_position: toString(position),
+    ancestors: ancestorHashes.slice(),
+    clientWeight: toStringSafe(shouldLog),
+    page_position: toStringSafe(postSequence),
   });
 
   // Track ancestor chain (bounded to 15)
-  if (ancestors.length < 15) {
-    ancestors.push(nError.hash);
+  if (ancestorHashes.length < 15) {
+    ancestorHashes.push(normalizedError.hash);
   }
 
   // Dispatch to sink
-  logFunc(payload);
+  sendPayload(payload);
   return true;
 }
 

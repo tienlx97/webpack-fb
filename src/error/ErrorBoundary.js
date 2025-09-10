@@ -66,17 +66,25 @@ export class ErrorBoundary extends PureComponent {
     };
   };
 
+  /** @param {ErrorBoundaryProps} props */
   constructor(props) {
     super(props);
 
+    /** @type {ErrorBoundaryState} */
     this.state = {
       error: null,
       moduleName: getReactDisplayName(this.props.children),
     };
 
+    // Suppress React’s default error logging to avoid noisy console output.
+    // NOTE: This can make bugs harder to find if you rely on console errors.
     this.suppressReactDefaultErrorLoggingIUnderstandThisWillMakeBugsHarderToFindAndFix = true;
   }
 
+  /**
+   * Allow external reset by incrementing `forceResetErrorCount`.
+   * When it changes and we currently show an error, clear it.
+   */
   componentDidUpdate(prevProps) {
     if (
       this.state.error &&
@@ -90,9 +98,16 @@ export class ErrorBoundary extends PureComponent {
     }
   }
 
+  /**
+   * React error boundary hook with component stack info.
+   * We enrich and publish the normalized error, then notify `onError`.
+   */
   componentDidCatch(e, errorInfo) {
     const { componentStack } = errorInfo;
-    let { augmentError, context = {}, description = 'base', onError } = this.props;
+    const { augmentError, onError } = this.props;
+
+    // Prepare context: default message if none provided
+    let { context = {}, description = 'base' } = this.props;
 
     if (!context.messageFormat) {
       context.messageFormat = 'caught error in module %s (%s)';
@@ -101,22 +116,36 @@ export class ErrorBoundary extends PureComponent {
 
     const { error, moduleName } = this.state;
 
-    if (error) {
-      ErrorSerializer.aggregateError(error, {
-        componentStack,
-        loggingSource: 'ERROR_BOUNDARY',
-      });
+    if (!error) {
+      return;
+    }
 
-      ErrorSerializer.aggregateError(error, context);
+    // Attach boundary provenance + caller-provided context
+    ErrorSerializer.aggregateError(error, {
+      componentStack,
+      loggingSource: 'ERROR_BOUNDARY',
+    });
 
-      if (typeof augmentError === 'function') {
+    ErrorSerializer.aggregateError(error, context);
+
+    // Let caller mutate/enrich the error (e.g., add metadata)
+    if (typeof augmentError === 'function') {
+      try {
         augmentError(error);
+      } catch {
+        // Avoid throwing during error handling
       }
+    }
 
-      ErrorPubSub.reportError(error);
+    // Publish to the error bus
+    ErrorPubSub.reportError(error);
 
-      if (typeof onError === 'function') {
+    // Notify consumer
+    if (typeof onError === 'function') {
+      try {
         onError(error, moduleName);
+      } catch {
+        // Swallow to avoid secondary errors
       }
     }
   }
@@ -125,8 +154,11 @@ export class ErrorBoundary extends PureComponent {
     const { error, moduleName } = this.state;
     if (error) {
       const { fallback } = this.props;
+      // If a fallback renderer is provided, call it with (error, moduleName)
       return fallback ? fallback(error, moduleName) : null;
     }
+
+    // No error → render children (or null)
     return this.props.children ?? null;
   }
 }

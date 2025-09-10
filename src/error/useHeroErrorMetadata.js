@@ -15,9 +15,9 @@ import { InteractionTracingMetrics } from '@fb-placeholder/InteractionTracingMet
 import { ErrorMetadata } from './ErrorMetadata';
 
 /**
- * Custom React hook for obtaining hero error metadata.
+ * Custom React hook for attaching Hero interaction metadata to an error.
  *
- * @returns {function} - A callback function to update error metadata.
+ * @returns {(error: any) => void} - Callback that augments `error.metadata`.
  */
 export function useHeroErrorMetadata() {
   const currentInteractionContext = useContext(HeroCurrentInteractionForLoggingContext);
