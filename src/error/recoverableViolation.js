@@ -7,41 +7,40 @@
 import { FBLogger } from './FBLogger';
 
 /**
- * Log a recoverable violation: either as a must-fix error or as a debug-only breadcrumb.
+ * Log a recoverable violation and return `null`.
  *
- * Behavior:
- * - If an `options.error` is provided, attach it via `.catching(error)` so stack/metadata are preserved.
- * - Otherwise, blame the previous frame so the log points at the caller, not this helper.
- * - If `extra.categoryKey` is provided, add it for grouping/dedup.
- * - If `extra.trackOnly` is true, emit as DEBUG (doesn't page/alert); else emit MUSTFIX.
+ * - If `attached.error` exists, keep original stack via `.catching`.
+ * - Otherwise, blame the previous frame so attribution points to the caller.
+ * - `opts.categoryKey` groups/dedups on the server.
+ * - If `opts.trackOnly` is true, emit as debug; else as must-fix.
  *
- * @param {string} errorMessage                      - Message to log.
- * @param {string} loggerIdentifier                  - Logger category/project for FBLogger.
- * @param {{ error?: Error }} [options={}]           - Optional bag with a raw Error to attach.
- * @param {{ categoryKey?: string, trackOnly?: boolean }} [extra] - Extra controls for categorization/verbosity.
- * @returns {null} Always returns null (recoverable path).
+ * @param {string} msg
+ * @param {string} projectName
+ * @param {{ error?: Error }} [attached={}]
+ * @param {{ categoryKey?: string, trackOnly?: boolean }} [opts]
+ * @returns {null}
  */
-export function recoverableViolation(errorMessage, loggerIdentifier, options = {}, extra) {
-  const { error } = options;
+export function recoverableViolation(msg, projectName, attached = {}, opts) {
+  const { error } = attached;
 
   // Create category logger
-  let logger = FBLogger(loggerIdentifier);
+  let fbLogger = FBLogger(projectName);
 
   // Attach raw error if provided; otherwise attribute blame to the caller frame
-  logger = error ? logger.catching(error) : logger.blameToPreviousFrame();
+  let logger = error ? fbLogger.catching(error) : fbLogger.blameToPreviousFrame();
 
   // Add category key if provided (BUGFIX: previously passed `error` by mistake)
-  if (extra && extra.categoryKey) {
-    logger = logger.addToCategoryKey(extra.categoryKey);
+  if (opts?.categoryKey) {
+    logger = logger.addToCategoryKey(opts.categoryKey);
   }
 
   // Track-only means record as debug; otherwise escalate as must-fix
-  const trackOnly = !!(extra && extra.trackOnly);
+  const trackOnly = !!opts?.trackOnly;
 
   if (trackOnly) {
-    logger.debug(errorMessage);
+    logger.debug(msg);
   } else {
-    logger.mustfix(errorMessage);
+    logger.mustfix(msg);
   }
 
   return null;

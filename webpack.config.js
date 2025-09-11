@@ -28,6 +28,8 @@ export default (env, { mode }) => {
     entry: path.join(__dirname, 'src', 'index.jsx'),
 
     resolve: {
+      fullySpecified: false,
+
       extensions: fileExtensions.map((ext) => '.' + ext).concat(['.js', '.jsx', '.ts', '.tsx', '.css']),
       alias: {
         // add your aliases here if needed, e.g. '@': path.resolve(__dirname, 'src'),
@@ -103,6 +105,7 @@ export default (env, { mode }) => {
         {
           test: /\.?(js|jsx)$/,
           exclude: /node_modules/,
+          resolve: { fullySpecified: false },
           use: [
             { loader: 'source-map-loader' },
             {

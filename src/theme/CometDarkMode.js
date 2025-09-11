@@ -1,9 +1,9 @@
 import ExecutionEnvironment from 'fbjs/lib/ExecutionEnvironment';
 
+import { gkx } from '@fb-utils/gkx';
+
 import { CometDarkModeRootClass } from './CometDarkModeRootClass';
 import { CometDarkModeSetting } from './CometDarkModeSetting';
-
-import { gkx } from '@fb-utils/gkx';
 
 // eslint-disable-next-line no-unused-vars
 const DARK_MODE_QUERY = '(prefers-color-scheme: dark)';
@@ -47,6 +47,9 @@ function updateSetting(newSetting) {
 
 function initDarkMode() {
   CometDarkModeRootClass.updateDarkModeRootClass(getDarkModeSetting());
+  if (window.matchMedia) {
+    //
+  }
 }
 
 function onDarkModeChange(callback) {

@@ -1,0 +1,13 @@
+self["webpackHotUpdatewebpack_fb"]("main",{
+
+/***/ "./node_modules/.pnpm/css-loader@7.1.2_webpack@5.76.0/node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].use[1]!./node_modules/.pnpm/postcss-loader@8.2.0_postcss@8.5.6_webpack@5.76.0/node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[2].use[2]!./src/css/app.css":
+/*!*****************************************************************************************************************************************************************************************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/css-loader@7.1.2_webpack@5.76.0/node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[2].use[1]!./node_modules/.pnpm/postcss-loader@8.2.0_postcss@8.5.6_webpack@5.76.0/node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[2].use[2]!./src/css/app.css ***!
+  \*****************************************************************************************************************************************************************************************************************************************************************************************/
+/***/ (() => {
+
+throw new Error("Module build failed (from ./node_modules/.pnpm/postcss-loader@8.2.0_postcss@8.5.6_webpack@5.76.0/node_modules/postcss-loader/dist/cjs.js):\nError: ENOENT: no such file or directory, open '/home/yugi/work/webpack-fb/src/theme/CometDarkModeSetting.js'\n    at Object.readFileUtf8 (node:internal/fs/sync:25:18)\n    at Object.readFileSync (node:fs:441:19)\n    at /home/yugi/work/webpack-fb/node_modules/.pnpm/@stylexjs+postcss-plugin@0.14.3/node_modules/@stylexjs/postcss-plugin/src/builder.js:143:29\n    at Array.map (<anonymous>)\n    at Object.build (/home/yugi/work/webpack-fb/node_modules/.pnpm/@stylexjs+postcss-plugin@0.14.3/node_modules/@stylexjs/postcss-plugin/src/builder.js:141:24)\n    at plugins (/home/yugi/work/webpack-fb/node_modules/.pnpm/@stylexjs+postcss-plugin@0.14.3/node_modules/@stylexjs/postcss-plugin/src/plugin.js:78:37)\n    at async LazyResult.runAsync (/home/yugi/work/webpack-fb/node_modules/.pnpm/postcss@8.5.6/node_modules/postcss/lib/lazy-result.js:293:11)\n    at async Object.loader (/home/yugi/work/webpack-fb/node_modules/.pnpm/postcss-loader@8.2.0_postcss@8.5.6_webpack@5.76.0/node_modules/postcss-loader/dist/index.js:81:14)");
+
+/***/ })
+
+});

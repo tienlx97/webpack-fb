@@ -165,11 +165,11 @@ export class FBLogMessage {
 
   /**
    * Log as error and throw.
-   * NOTE: The call `this.$1('error', msg, params)` passes `params` as a single array argument.
+   * NOTE: The call `this.logMessage('error', msg, params)` passes `params` as a single array argument.
    * Likely intention was `...params`. Keeping as-is to preserve behavior.
    */
   mustfixThrow(msg, ...params) {
-    let thrown = this.$1('error', msg, params);
+    let thrown = this.logMessage('error', msg, params);
 
     if (!thrown) {
       // If we couldn't create/capture a raw error, synthesize one and blame previous frame
