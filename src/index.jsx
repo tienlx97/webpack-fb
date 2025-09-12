@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 
 import { CometErrorLogging } from '@fb-error/CometErrorLogging';
 
-import { App } from './App';
+import { App } from './App.example';
 
 import './css/app.css';
 
